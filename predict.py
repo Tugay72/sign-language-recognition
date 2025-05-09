@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 MODEL_PATH = "models/final_model.keras"
 IMAGE_DIR = "custom_images"
 IMAGE_SIZE = (28, 28)
+DEBUG_DIR = "debug_images"
 
 # Eğitim sırasında kullanılan etiket eşleştirmesi
 LABEL_MAP = {
@@ -17,85 +18,95 @@ LABEL_MAP = {
     18: 'T', 19: 'U', 20: 'V', 21: 'W', 22: 'X', 23: 'Y'
 }
 
-def preprocess_image(img_path):
-    """Görseli model için hazırlar"""
-    # Görüntüyü oku
+def center_crop_26x26(img):
+    """28x28 görüntünün ortasındaki 25x25 alanı döndürür."""
+    h, w = img.shape[:2]
+    start_x = (w - 26) // 2
+    start_y = (h - 26) // 2
+    return img[start_y:start_y + 26, start_x:start_x + 26]
+
+
+def preprocess_image(img_path, debug=False):
+    """Model tahmini için görüntüyü işler."""
     img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
-        print(f"Uyarı: {img_path} okunamadı!")
+        print(f"HATA: {img_path} okunamadı.")
         return None
-    
+
     # Görüntüyü yeniden boyutlandır
     img = cv2.resize(img, IMAGE_SIZE)
-    
-    # Görüntüyü tersine çevir (siyah arka plan, beyaz harf)
-    img = cv2.bitwise_not(img)
-    
-    # Gürültüyü azalt
-    img = cv2.GaussianBlur(img, (3, 3), 0)
-    
-    # Eşikleme uygula
-    _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
-    
-    # Görüntüyü normalize et
-    img = img.astype("float32") / 255.0
-    
-    # Debug için görüntüyü kaydet
-    debug_path = os.path.join("debug_images", os.path.basename(img_path))
-    os.makedirs("debug_images", exist_ok=True)
-    cv2.imwrite(debug_path, (img * 255).astype(np.uint8))
-    
-    # Model için gerekli şekle dönüştür
-    img = np.expand_dims(img, axis=-1)
-    img = np.expand_dims(img, axis=0)
-    
-    return img
 
-def main():
-    # Modeli yükle
-    try:
-        model = load_model(MODEL_PATH)
-    except:
-        print("Hata: Model bulunamadı! Önce train_model.py'yi çalıştırın.")
+    # Gaussian blur ve adaptif threshold (daha esnek)
+    img = cv2.GaussianBlur(img, (3, 3), 0)
+    img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                 cv2.THRESH_BINARY, 11, 2)
+
+    # Normalleştir ve modele uygun şekle getir
+    img_norm = img.astype("float32") / 255.0
+    img_norm = np.expand_dims(img_norm, axis=-1)
+    img_norm = np.expand_dims(img_norm, axis=0)
+
+    # Debug için kaydet
+    if debug:
+        os.makedirs(DEBUG_DIR, exist_ok=True)
+        debug_path = os.path.join(DEBUG_DIR, os.path.basename(img_path))
+        cv2.imwrite(debug_path, img)
+
+    return img_norm, img  # hem işlenmiş hem görselleştirilecek ham hâli
+
+def predict_and_display(model, img_path):
+    """Görseli işler, tahmin yapar ve sonucu gösterir."""
+    processed, display_img = preprocess_image(img_path, debug=True)
+    if processed is None:
         return
 
-    # Klasördeki görselleri işle
-    for img_file in os.listdir(IMAGE_DIR):
+    pred = model.predict(processed)[0]
+    predicted_idx = np.argmax(pred)
+    confidence = pred[predicted_idx]
+    predicted_char = LABEL_MAP[predicted_idx]
+
+    # Görsel ile birlikte sonucu göster
+    plt.figure(figsize=(12, 4))
+
+    # Orijinal görüntü
+    plt.subplot(1, 3, 1)
+    original = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    plt.imshow(original, cmap='gray')
+    plt.title(f"Orijinal: {os.path.basename(img_path)}")
+
+    # İşlenmiş görüntü
+    plt.subplot(1, 3, 2)
+    plt.imshow(display_img, cmap='gray')
+    plt.title("İşlenmiş")
+
+    # Tahmin dağılımı
+    plt.subplot(1, 3, 3)
+    plt.bar(range(len(pred)), pred, color='skyblue')
+    plt.xticks(range(len(pred)), list(LABEL_MAP.values()), rotation=90)
+    plt.title(f"Tahmin: {predicted_char} ({confidence:.2f})")
+
+    plt.tight_layout()
+    plt.show()
+
+def main():
+    # Model kontrolü
+    if not os.path.exists(MODEL_PATH):
+        print(f"Model bulunamadı: {MODEL_PATH}")
+        print("Lütfen önce eğitim dosyasını çalıştırın.")
+        return
+
+    model = load_model(MODEL_PATH)
+
+    # Görsel klasör kontrolü
+    if not os.path.exists(IMAGE_DIR):
+        print(f"Görsel klasörü bulunamadı: {IMAGE_DIR}")
+        return
+
+    # Görselleri işle
+    for img_file in sorted(os.listdir(IMAGE_DIR)):
         if img_file.lower().endswith((".png", ".jpg", ".jpeg")):
             img_path = os.path.join(IMAGE_DIR, img_file)
-            processed_img = preprocess_image(img_path)
-            
-            if processed_img is not None:
-                # Tahmin yap
-                pred = model.predict(processed_img)
-                predicted_idx = np.argmax(pred)
-                confidence = pred[0][predicted_idx]
-                predicted_char = LABEL_MAP[predicted_idx]
-                
-                # Sonucu göster
-                print(f"{img_file} → Tahmin: {predicted_char} (Güven: {confidence:.2f})")
-                
-                # Görselleştirme
-                plt.figure(figsize=(12, 4))
-                
-                # Orijinal görüntü
-                plt.subplot(1, 3, 1)
-                original = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-                plt.imshow(original, cmap='gray')
-                plt.title(f"Orijinal: {img_file}")
-                
-                # İşlenmiş görüntü
-                plt.subplot(1, 3, 2)
-                plt.imshow(processed_img.reshape(IMAGE_SIZE), cmap='gray')
-                plt.title("İşlenmiş")
-                
-                # Tahmin dağılımı
-                plt.subplot(1, 3, 3)
-                plt.bar(range(len(pred[0])), pred[0])
-                plt.title(f"Tahmin: {predicted_char}")
-                
-                plt.tight_layout()
-                plt.show()
+            predict_and_display(model, img_path)
 
 if __name__ == "__main__":
     main()
