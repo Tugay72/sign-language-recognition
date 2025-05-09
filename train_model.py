@@ -14,7 +14,7 @@ DATA_DIR = 'data'
 MODEL_DIR = 'models'
 IMAGE_SIZE = (28, 28)
 CLASSES = 24
-EPOCHS = 15
+EPOCHS = 10
 BATCH_SIZE = 64
 
 # Klasörleri oluştur
