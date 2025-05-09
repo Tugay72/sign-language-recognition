@@ -18,6 +18,7 @@ LABEL_MAP = {
     18: 'T', 19: 'U', 20: 'V', 21: 'W', 22: 'X', 23: 'Y'
 }
 
+# Test amaçlı
 def center_crop_26x26(img):
     """28x28 görüntünün ortasındaki 25x25 alanı döndürür."""
     h, w = img.shape[:2]
