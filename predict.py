@@ -37,10 +37,6 @@ def preprocess_image(img_path, debug=False):
     # Görüntüyü yeniden boyutlandır
     img = cv2.resize(img, IMAGE_SIZE)
 
-    # Gaussian blur ve adaptif threshold (daha esnek)
-    img = cv2.GaussianBlur(img, (3, 3), 0)
-    img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-                                 cv2.THRESH_BINARY, 11, 2)
 
     # Normalleştir ve modele uygun şekle getir
     img_norm = img.astype("float32") / 255.0
