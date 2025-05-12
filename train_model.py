@@ -57,9 +57,9 @@ def build_model():
         Conv2D(128, (3, 3), activation='relu'),
         MaxPooling2D(2, 2),
         Flatten(),
-        Dropout(0.5),
+        Dropout(0.5), # Overfittingi onlemeye yardimci olur
         Dense(256, activation='relu'),
-        Dense(CLASSES, activation='softmax')
+        Dense(CLASSES, activation='softmax') # Olasılık dağılımı
     ])
 
     model.compile(optimizer='adam',
@@ -68,8 +68,7 @@ def build_model():
     return model
 
 def train_model(model, X_train, y_train, X_test, y_test):
-    """Modeli eğitir (veri artırımı dahil)."""
-    datagen = ImageDataGenerator(
+    datagen = ImageDataGenerator( # Görüntü arttırma (döndürme, kaydırma, yakınlaştırma.)
         rotation_range=10,
         zoom_range=0.1,
         width_shift_range=0.1,
@@ -77,10 +76,10 @@ def train_model(model, X_train, y_train, X_test, y_test):
     )
     datagen.fit(X_train)
 
-    callbacks = [
+    callbacks = [ # En iyi doğrulukta modeli kaydet
         ModelCheckpoint(os.path.join(MODEL_DIR, 'best_model.keras'), 
                         save_best_only=True, monitor='val_accuracy'),
-        EarlyStopping(patience=3, restore_best_weights=True)
+        EarlyStopping(patience=3, restore_best_weights=True) # Gelişme durursa durdur
     ]
 
     history = model.fit(datagen.flow(X_train, y_train, batch_size=BATCH_SIZE),
